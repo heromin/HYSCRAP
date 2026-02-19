@@ -47,7 +47,12 @@ def run_scraper():
 
             for ep in info.episodes:
                 try:
-                    num_ep = int(ep.id.split('-')[-1])
+                    # CORRECCIÓN: Manejo de ID tipo int o string
+                    if isinstance(ep.id, int):
+                        num_ep = ep.id
+                    else:
+                        num_ep = int(str(ep.id).split('-')[-1])
+                    
                     video_links = api.get_links(anime.id, ep.id)
                     
                     if not video_links: continue
@@ -68,9 +73,10 @@ def run_scraper():
                     success, resp = send_episode_with_retry(api_url, payload, headers)
                     if success:
                         log(f"✔️ Ep {num_ep} guardado")
-                        time.sleep(1.5) # Pausa necesaria para estabilidad en ByetHost
+                        time.sleep(1.5) 
                 except Exception as e:
-                    log(f"❌ Error en ep {ep.id}: {e}", "ERROR")
+                    # Uso de getattr para evitar errores si ep no tiene id
+                    log(f"❌ Error en ep {getattr(ep, 'id', 'desconocido')}: {e}", "ERROR")
 
         except Exception as e:
             log(f"💥 Error crítico: {e}", "ERROR")
