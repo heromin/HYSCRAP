@@ -68,7 +68,7 @@ def run_scraper():
                     success, resp = send_episode_with_retry(api_url, payload, headers)
                     if success:
                         log(f"✔️ Ep {num_ep} guardado")
-                        time.sleep(1) 
+                        time.sleep(1.5) # Pausa necesaria para estabilidad en ByetHost
                 except Exception as e:
                     log(f"❌ Error en ep {ep.id}: {e}", "ERROR")
 
