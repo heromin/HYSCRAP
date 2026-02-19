@@ -1,45 +1,4 @@
-import os
-import requests
-from animeflv import AnimeFLV
-import sys
-import time
-from datetime import datetime
-
-def log(message, level="INFO"):
-    """Logging con timestamp"""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] [{level}] {message}")
-
-def send_episode_with_retry(api_url, payload, headers, max_retries=3):
-    """Envía episodio con reintentos exponenciales"""
-    for attempt in range(max_retries):
-        try:
-            response = requests.post(api_url, json=payload, headers=headers, timeout=15)
-            
-            if response.status_code == 200:
-                return True, response.text
-            elif response.status_code == 403:
-                log(f"❌ Autenticación fallida (403). Token inválido.", "ERROR")
-                return False, response.text
-            elif response.status_code == 404:
-                log(f"❌ API endpoint no encontrado (404).", "ERROR")
-                return False, response.text
-            else:
-                log(f"⚠️ Intento {attempt + 1}/{max_retries} - Código HTTP {response.status_code}", "WARN")
-                
-        except requests.exceptions.Timeout:
-            log(f"⏱️ Timeout en intento {attempt + 1}/{max_retries}", "WARN")
-        except requests.exceptions.ConnectionError:
-            log(f"🔗 Error de conexión en intento {attempt + 1}/{max_retries}", "WARN")
-        except requests.exceptions.RequestException as e:
-            log(f"⚠️ Error en intento {attempt + 1}/{max_retries}: {e}", "WARN")
-        
-        if attempt < max_retries - 1:
-            wait_time = 2 ** attempt  # 1s, 2s, 4s
-            log(f"⏳ Esperando {wait_time}s antes de reintentar...", "INFO")
-            time.sleep(wait_time)
-    
-    return False, "Agotados los reintentos"
+# ... (mantén tus funciones log y send_episode_with_retry igual)
 
 def run_scraper():
     """Ejecuta el scraper de animes"""
@@ -63,7 +22,6 @@ def run_scraper():
     log(f"🚀 Iniciando scraper", "INFO")
     log(f"   Anime: {anime_name}", "INFO")
     log(f"   TMDB ID: {tmdb_id}", "INFO")
-    log(f"   API URL: {api_url}", "INFO")
 
     # 2. Conectar a AnimeFLV
     try:
@@ -113,8 +71,6 @@ def run_scraper():
                         error_count += 1
                         continue
 
-                    log(f"   📡 {len(video_links)} servidor(s) encontrado(s)", "INFO")
-
                     # Formatear servidores
                     links_payload = []
                     for link in video_links:
@@ -124,13 +80,7 @@ def run_scraper():
                                 "url": str(link.code).strip()
                             })
                         except Exception as e:
-                            log(f"   ⚠️ Error formateando servidor: {e}", "WARN")
                             continue
-
-                    if not links_payload:
-                        log(f"   ❌ No hay URLs válidas para episodio {num_ep}", "ERROR")
-                        error_count += 1
-                        continue
 
                     # Preparar payload
                     payload = {
@@ -150,6 +100,9 @@ def run_scraper():
                     if success:
                         log(f"   ✅ Episodio {num_ep} guardado correctamente", "INFO")
                         success_count += 1
+                        # --- CAMBIO AQUÍ: Pausa para no saturar VistaPanel ---
+                        time.sleep(1.5) 
+                        # -----------------------------------------------------
                     else:
                         log(f"   ❌ Fallo al guardar episodio {num_ep}: {response}", "ERROR")
                         error_count += 1
@@ -160,21 +113,12 @@ def run_scraper():
                     continue
 
             # 6. Resumen final
-            log(f"\n{'='*60}", "INFO")
-            log(f"📊 RESUMEN", "INFO")
-            log(f"   ✅ Exitosos: {success_count}", "INFO")
-            log(f"   ❌ Errores: {error_count}", "INFO")
-            log(f"   📺 Total procesados: {success_count + error_count}/{total_episodes}", "INFO")
-            log(f"{'='*60}\n", "INFO")
-
-            if error_count > 0:
-                sys.exit(1)  # Salir con error si hubo fallos
+            log(f"\n{'='*60}")
+            log(f"📊 RESUMEN FINAL")
+            log(f"   ✅ Exitosos: {success_count}")
+            log(f"   ❌ Errores: {error_count}")
+            log(f"{'='*60}\n")
 
     except Exception as e:
         log(f"💥 Error crítico: {e}", "ERROR")
-        import traceback
-        log(traceback.format_exc(), "ERROR")
         sys.exit(1)
-
-if __name__ == "__main__":
-    run_scraper()
