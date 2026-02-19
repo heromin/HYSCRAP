@@ -1,2 +1,3 @@
 requests==2.31.0
 animeflv==2.2.0
+cloudscraper==1.2.71
