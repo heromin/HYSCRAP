@@ -1,3 +1,4 @@
 requests
-animeflv
 cloudscraper
+beautifulsoup4
+animeflv
