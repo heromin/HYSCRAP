@@ -2,35 +2,43 @@ import os, json
 from animeflv import AnimeFLV
 
 def run_scraper():
-    anime_name = "Hell's Paradise" # O usa os.getenv
+    anime_name = "Hell's Paradise" 
     tmdb_id = 117465
-    anime_id_db = 6 # El ID que vimos en tu tabla animes
+    anime_id_db = 6 # El ID que confirmamos en tu tabla
 
     with AnimeFLV() as api:
-        res = api.search(anime_name)
-        info = api.get_anime_info(res[0].id)
-
-        print("\n--- COPIA DESDE AQUÍ ABAJO ---\n")
+        print(f"🔍 Buscando: {anime_name}")
+        search = api.search(anime_name)
+        if not search: return print("❌ No encontrado")
         
-        sql_final = "INSERT INTO episodios (anime_id, numero_episodio, enlace, servidores, temporada) VALUES "
-        values = []
+        info = api.get_anime_info(search[0].id)
+        print(f"🚀 Generando SQL para {len(info.episodes)} episodios...")
 
+        sql_values = []
         for ep in info.episodes:
-            num_ep = ep.id if isinstance(ep.id, int) else int(str(ep.id).split('-')[-1])
-            links = api.get_links(info.id, ep.id)
-            if not links: continue
-            
-            links_data = json.dumps([{"server": l.server, "url": l.url} for l in links])
-            enlace_p = links[0].url
-            
-            # Escapar comillas simples para SQL
-            links_data_esc = links_data.replace("'", "''")
-            
-            values.append(f"({anime_id_db}, {num_ep}, '{enlace_p}', '{links_data_esc}', 1)")
+            try:
+                # Extraer número de episodio
+                num_ep = ep.id if isinstance(ep.id, int) else int(str(ep.id).split('-')[-1])
+                links = api.get_links(info.id, ep.id)
+                
+                if links:
+                    # Formateamos los servidores para que se vean bien en tu web
+                    links_list = [{"server": l.server.capitalize(), "url": l.url} for l in links]
+                    links_json = json.dumps(links_list).replace("'", "''")
+                    enlace_principal = links[0].url
+                    
+                    sql_values.append(f"({anime_id_db}, {num_ep}, '{enlace_principal}', '{links_json}', 1)")
+            except:
+                continue
 
-        print(sql_final + ",\n".join(values) + " ON DUPLICATE KEY UPDATE enlace=VALUES(enlace), servidores=VALUES(servidores);")
-        
-        print("\n--- HASTA AQUÍ ---\n")
+        # Construcción del comando SQL final
+        if sql_values:
+            print("\n--- COPIA DESDE LA SIGUIENTE LÍNEA ---")
+            full_sql = "INSERT INTO episodios (anime_id, numero_episodio, enlace, servidores, temporada) VALUES \n"
+            full_sql += ",\n".join(sql_values)
+            full_sql += "\nON DUPLICATE KEY UPDATE enlace=VALUES(enlace), servidores=VALUES(servidores);"
+            print(full_sql)
+            print("--- HASTA AQUÍ ---\n")
 
 if __name__ == "__main__":
     run_scraper()
