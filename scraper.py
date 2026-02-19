@@ -37,7 +37,9 @@ def run_scraper():
         try:
             log(f"🔍 Buscando: {anime_name}")
             results = api.search(anime_name)
-            if not results: return
+            if not results: 
+                log("❌ No se encontraron resultados", "ERROR")
+                return
             
             anime = results[0]
             info = api.get_anime_info(anime.id)
@@ -52,13 +54,21 @@ def run_scraper():
 
                     links_payload = [{"server": l.server.capitalize(), "url": l.code} for l in video_links]
                     
-                    payload = {"tmdb_id": int(tmdb_id), "numero": num_ep, "links": links_payload}
-                    headers = {"Authorization": security_token, "Content-Type": "application/json"}
+                    payload = {
+                        "tmdb_id": int(tmdb_id), 
+                        "numero": num_ep, 
+                        "links": links_payload
+                    }
+                    
+                    headers = {
+                        "Authorization": security_token, 
+                        "Content-Type": "application/json"
+                    }
 
                     success, resp = send_episode_with_retry(api_url, payload, headers)
                     if success:
                         log(f"✔️ Ep {num_ep} guardado")
-                        time.sleep(1.5) # Pausa de seguridad para VistaPanel
+                        time.sleep(1) 
                 except Exception as e:
                     log(f"❌ Error en ep {ep.id}: {e}", "ERROR")
 
