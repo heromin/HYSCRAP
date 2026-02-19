@@ -3,83 +3,60 @@ import requests
 from animeflv import AnimeFLV
 import sys
 import time
-from datetime import datetime
+import json
 
-def log(message, level="INFO"):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] [{level}] {message}")
-
-def send_episode_with_retry(api_url, payload, headers, max_retries=3):
-    for attempt in range(max_retries):
-        try:
-            response = requests.post(api_url, json=payload, headers=headers, timeout=20)
-            if response.status_code == 200:
-                return True, response.text
-            log(f"⚠️ Intento {attempt + 1} falló: {response.status_code}", "WARN")
-        except Exception as e:
-            log(f"⚠️ Error de red: {e}", "WARN")
-        
-        if attempt < max_retries - 1:
-            time.sleep(2 ** attempt)
-    return False, "Reintentos agotados"
+def log(message):
+    print(f"[{time.strftime('%H:%M:%S')}] {message}")
 
 def run_scraper():
     anime_name = os.getenv('ANIME_NAME')
     tmdb_id = os.getenv('TMDB_ID')
     api_url = os.getenv('API_URL')
-    security_token = os.getenv('API_TOKEN')
-
-    if not all([anime_name, tmdb_id, api_url, security_token]):
-        log("❌ Faltan Secrets de configuración", "ERROR")
-        sys.exit(1)
+    api_token = os.getenv('API_TOKEN')
 
     with AnimeFLV() as api:
-        try:
-            log(f"🔍 Buscando: {anime_name}")
-            results = api.search(anime_name)
-            if not results: 
-                log("❌ No se encontraron resultados", "ERROR")
-                return
-            
-            anime = results[0]
-            info = api.get_anime_info(anime.id)
-            log(f"✅ Procesando {len(info.episodes)} episodios")
+        log(f"🔍 Buscando: {anime_name}")
+        results = api.search(anime_name)
+        if not results:
+            log("❌ No se encontro el anime")
+            return
+        
+        anime = results[0]
+        info = api.get_anime_info(anime.id)
+        log(f"✅ Encontrado: {info.title}. Procesando {len(info.episodes)} episodios...")
 
-            for ep in info.episodes:
-                try:
-                    # CORRECCIÓN: Manejo de ID tipo int o string
-                    if isinstance(ep.id, int):
-                        num_ep = ep.id
-                    else:
-                        num_ep = int(str(ep.id).split('-')[-1])
-                    
-                    video_links = api.get_links(anime.id, ep.id)
-                    
-                    if not video_links: continue
+        for ep in info.episodes:
+            try:
+                # Extraer numero de episodio
+                num_ep = ep.id if isinstance(ep.id, int) else int(str(ep.id).split('-')[-1])
+                
+                video_links = api.get_links(anime.id, ep.id)
+                if not video_links: continue
 
-                    links_payload = [{"server": l.server.capitalize(), "url": l.code} for l in video_links]
-                    
-                    payload = {
-                        "tmdb_id": int(tmdb_id), 
-                        "numero": num_ep, 
-                        "links": links_payload
-                    }
-                    
-                    headers = {
-                        "Authorization": security_token, 
-                        "Content-Type": "application/json"
-                    }
+                # Preparar JSON de servidores
+                links_data = [{"server": l.server, "url": l.code} for l in video_links]
+                
+                payload = {
+                    "tmdb_id": int(tmdb_id),
+                    "numero": num_ep,
+                    "links": json.dumps(links_data) # Enviamos como string para evitar errores de parseo
+                }
+                
+                # Enviamos el token tanto en Header como en URL para asegurar que ByetHost lo vea
+                target_url = f"{api_url}?token={api_token}"
+                headers = {"Authorization": api_token, "Content-Type": "application/json"}
 
-                    success, resp = send_episode_with_retry(api_url, payload, headers)
-                    if success:
-                        log(f"✔️ Ep {num_ep} guardado")
-                        time.sleep(1.5) 
-                except Exception as e:
-                    # Uso de getattr para evitar errores si ep no tiene id
-                    log(f"❌ Error en ep {getattr(ep, 'id', 'desconocido')}: {e}", "ERROR")
+                response = requests.post(target_url, json=payload, headers=headers, timeout=30)
+                
+                if response.status_code == 200:
+                    log(f"✔️ Ep {num_ep}: OK")
+                else:
+                    log(f"⚠️ Ep {num_ep}: Error {response.status_code} - {response.text[:100]}")
+                
+                time.sleep(2) # Pausa para no saturar el hosting gratuito
 
-        except Exception as e:
-            log(f"💥 Error crítico: {e}", "ERROR")
+            except Exception as e:
+                log(f"❌ Error en ep: {e}")
 
 if __name__ == "__main__":
     run_scraper()
